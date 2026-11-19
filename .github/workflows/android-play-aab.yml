@@ -42,7 +42,7 @@ jobs:
       - name: Install Android 16 SDK and target API 36
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;36.0.0"
-          sed -i -E 's/(compileSdkVersion[[:space:]]*=[[:space:]]*)35/\136/; s/(targetSdkVersion[[:space:]]*=[[:space:]]*)35/\136/' android/variables.gradle
+          sed -i -E 's/compileSdkVersion[[:space:]]*=[[:space:]]*35/compileSdkVersion = 36/; s/targetSdkVersion[[:space:]]*=[[:space:]]*35/targetSdkVersion = 36/' android/variables.gradle
           grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           grep -Eq 'targetSdkVersion[[:space:]]*=[[:space:]]*36' android/variables.gradle
 
