@@ -1,0 +1,132 @@
+name: Build Google Play AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/android-play-aab.yml'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'www/**'
+
+jobs:
+  android-play:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install existing project dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate and synchronize Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Set incrementing Play version code
+        run: |
+          cat >> android/app/build.gradle <<'GROOVY'
+
+          // Google Play requires an increasing versionCode for each update.
+          android {
+              defaultConfig {
+                  versionCode 1000 + Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER'))
+              }
+          }
+          GROOVY
+
+      - name: Configure upload signing if secret is available
+        env:
+          ANDROID_SIGNING_BUNDLE_B64: ${{ secrets.ANDROID_SIGNING_BUNDLE_B64 }}
+        run: |
+          if [ -n "$ANDROID_SIGNING_BUNDLE_B64" ]; then
+            python3 - <<'PY'
+          import os, json, base64, pathlib
+          payload = json.loads(base64.b64decode(os.environ["ANDROID_SIGNING_BUNDLE_B64"], validate=True))
+          key = base64.b64decode(payload["keystore_base64"], validate=True)
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ali-alawadi-upload-key.p12"
+          path.write_bytes(key)
+          values = {
+              "ANDROID_UPLOAD_KEYSTORE": str(path),
+              "ANDROID_UPLOAD_STORE_PASSWORD": payload["store_password"],
+              "ANDROID_UPLOAD_KEY_ALIAS": payload["key_alias"],
+              "ANDROID_UPLOAD_KEY_PASSWORD": payload["key_password"],
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as out:
+              for name, value in values.items():
+                  if not value or "\n" in value or "\r" in value:
+                      raise ValueError("Invalid signing configuration")
+                  if "PASSWORD" in name:
+                      print("::add-mask::" + value)
+                  out.write(name + "=" + value + "\n")
+          PY
+            cat >> android/app/build.gradle <<'GROOVY'
+
+          // The upload key is provided only through GitHub Actions secrets.
+          if (System.getenv('ANDROID_UPLOAD_KEYSTORE')) {
+              android {
+                  signingConfigs {
+                      uploadRelease {
+                          storeFile file(System.getenv('ANDROID_UPLOAD_KEYSTORE'))
+                          storePassword System.getenv('ANDROID_UPLOAD_STORE_PASSWORD')
+                          keyAlias System.getenv('ANDROID_UPLOAD_KEY_ALIAS')
+                          keyPassword System.getenv('ANDROID_UPLOAD_KEY_PASSWORD')
+                      }
+                  }
+                  buildTypes {
+                      release {
+                          signingConfig signingConfigs.uploadRelease
+                      }
+                  }
+              }
+          }
+          GROOVY
+            echo "AAB_SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "AAB_SIGNED=false" >> "$GITHUB_ENV"
+            echo "::notice::Signing secret is missing; generating an unsigned AAB for validation only."
+          fi
+
+      - name: Build Android App Bundle
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew bundleRelease --no-daemon
+
+      - name: Verify signed bundle
+        if: env.AAB_SIGNED == 'true'
+        run: |
+          jarsigner -verify android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload signed AAB for Google Play
+        if: env.AAB_SIGNED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ali-alawadi-quran-signed-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload unsigned AAB for build checks only
+        if: env.AAB_SIGNED != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ali-alawadi-quran-unsigned-aab-NOT-FOR-PLAY
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 7
