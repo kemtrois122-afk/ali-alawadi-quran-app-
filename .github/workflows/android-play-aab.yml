@@ -1,4 +1,5 @@
 name: Build Google Play AAB
+# Rebuild after configuring the protected Android signing secret.
 
 on:
   workflow_dispatch:
