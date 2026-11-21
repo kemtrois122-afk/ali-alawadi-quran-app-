@@ -47,6 +47,12 @@ jobs:
           grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           grep -Eq 'targetSdkVersion[[:space:]]*=[[:space:]]*36' android/variables.gradle
 
+      - name: Require Android 6.0 or newer for Google Play
+        run: |
+          sed -i -E 's/minSdkVersion[[:space:]]*=[[:space:]]*[0-9]+/minSdkVersion = 23/' android/variables.gradle
+          grep -E 'minSdkVersion' android/variables.gradle
+          grep -Eq 'minSdkVersion[[:space:]]*=[[:space:]]*23([[:space:]]|$)' android/variables.gradle
+
       - name: Apply the existing website icon to Android
         run: |
           curl --fail --location --retry 3 --silent --show-error \
