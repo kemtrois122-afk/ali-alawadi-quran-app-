@@ -47,11 +47,22 @@ jobs:
           grep -E 'compileSdkVersion|targetSdkVersion' android/variables.gradle
           grep -Eq 'targetSdkVersion[[:space:]]*=[[:space:]]*36' android/variables.gradle
 
-      - name: Require Android 6.0 or newer for Google Play
+      - name: Require Android 7.0 or newer for Google Play
         run: |
-          sed -i -E 's/minSdkVersion[[:space:]]*=[[:space:]]*[0-9]+/minSdkVersion = 23/' android/variables.gradle
+          sed -i -E 's/minSdkVersion[[:space:]]*=[[:space:]]*[0-9]+/minSdkVersion = 24/' android/variables.gradle
           grep -E 'minSdkVersion' android/variables.gradle
-          grep -Eq 'minSdkVersion[[:space:]]*=[[:space:]]*23([[:space:]]|$)' android/variables.gradle
+          grep -Eq 'minSdkVersion[[:space:]]*=[[:space:]]*24([[:space:]]|$)' android/variables.gradle
+
+      - name: Force minimum SDK in Android app Gradle
+        run: |
+          cat >> android/app/build.gradle <<'GROOVY'
+
+          android {
+              defaultConfig {
+                  minSdkVersion 24
+              }
+          }
+          GROOVY
 
       - name: Apply the existing website icon to Android
         run: |
