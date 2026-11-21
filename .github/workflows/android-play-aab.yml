@@ -1,5 +1,5 @@
 name: Build Google Play AAB
-# Rebuild after configuring the protected Android signing secret.
+# Build a new signed AAB for the closed-testing track with a higher Play versionCode.
 
 on:
   workflow_dispatch:
